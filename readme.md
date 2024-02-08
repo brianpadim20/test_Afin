@@ -176,3 +176,153 @@ De esta manera, se crea exitosamente la base de datos giros_minsalud y las respe
 ---
 **Ingesta de información a la tabla**
 Una vez depurada la información con la cual se va a trabajar, se procede a ingestar la información a la tabla
+
+Para esta prueba decidí hacer una ingesta automatizada usando Python como herramienta de automatización.
+
+Ya entendiendo que el objetivo es realizar la ingestión de datos desde archivos CSV a las tablas captacion y evento en la base de datos giros_minsalud en SQL Server, para de este modo evitar hacer la ingesta de forma manual.
+
+El código se estructura de la siguiente manera
+
+- **El script de python**: ingesta.py contiene el código para la conexión a la base de datos, definición de las funciones para la ingesta de datos y la lógica para leer y procesar los datos .csv
+
+- **Directorio de archivos**: Contiene los archivos .csv que serán ingestados en la base de datos. Los nombres deben seguir un formato específico para extraer el mes y el año.
+
+**Pasos del código**:
+- **Conexión a la Base de Datos**: El script establece una conexión a la base de datos SQL Server utilizando pyodbc.
+
+- **Definición de Funciones**: Se definen funciones para la inserción de datos en las tablas captacion y evento, así como también una función para actualizar los campos MES y ANIO en la tabla captacion.
+
+- **Ingestión de Datos**: El script itera sobre los archivos en el directorio csv, identifica el mes y el año a partir del nombre del archivo, y realiza la ingestión de datos en la tabla correspondiente (ya sea captacion o evento).
+
+- **Actualización de Campos MES y ANIO**: Para cada archivo de captación, se actualizan los campos MES y ANIO en la tabla captacion utilizando la función setFecha.
+
+- **Cierre de la Conexión**: Una vez completada la ingestión de datos, se cierra la conexión a la base de datos.
+
+El código es el siguiente: 
+
+    import os
+    import pyodbc
+    import re
+
+
+    # Establecer conexión a la base de datos SQL Server
+    conexion = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-6QD6LBH;DATABASE=giros_minsalud;Trusted_Connection=yes')
+
+    def setFecha(mes, anio):
+        cursor = conexion.cursor()
+        sql = '''UPDATE dbo.captacion 
+        SET MES = ? WHERE MES IS NULL
+        
+        UPDATE dbo.captacion
+        SET ANIO = ? WHERE ANIO IS NULL
+        '''
+        cursor.execute(sql, mes, anio)
+        conexion.commit()
+
+    # Función para insertar datos en la tabla captacion
+    def insertar_captacion(datos):
+        cursor = conexion.cursor()
+        if len(datos) == 9:
+            sql = "INSERT INTO dbo.captacion (DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        elif len(datos) == 10:  # Revisamos la longitud esperada de los datos
+            sql = "INSERT INTO dbo.captacion (DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, COMPLEMENTO_NOMBRE_IPS, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        elif len(datos) == 11:
+            sql = "INSERT INTO dbo.captacion (DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, COMPLEMENTO_NOMBRE_IPS, FORMA_DE_CONTRATACIÓN, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        else:
+            print("Número de campos incorrecto:", datos)
+            return
+        
+        cursor.execute(sql, datos)
+        conexion.commit()
+
+
+    # Función para insertar datos en la tabla evento
+    def insertar_evento(datos):
+        cursor = conexion.cursor()
+        if len(datos) == 8:
+            sql = "INSERT INTO dbo.evento (MES, ANIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        elif len(datos) == 9:
+            sql = "INSERT INTO dbo.evento (MES, ANIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, FORMA_DE_CONTRATACIÓN, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        else:
+            return
+        cursor.execute(sql, datos)
+        conexion.commit()
+
+    # Directorio donde se encuentran los archivos a ingestar
+    directorio = "csv"
+
+    # Expresión regular para buscar el mes y el año en el nombre del archivo
+    patron = r'(\w+)-(\d{4})'
+
+    for nombre_archivo in os.listdir(directorio):
+        ruta_directorio = os.path.join(directorio, nombre_archivo)
+        
+        coincidencia = re.search(patron, nombre_archivo)
+        if coincidencia:
+            mes = coincidencia.group(1)
+            anio = coincidencia.group(2)
+        else:
+            print("No se pudo encontrar mes y año en el nombre del archivo:", nombre_archivo)
+            continue  
+        
+        # Verificar si el nombre del archivo contiene "GIRO DIRECTO EVENTO"
+        if "GIRO DIRECTO EVENTO" in nombre_archivo:
+            # Obtener mes y año del nombre del archivo
+            partes_nombre = nombre_archivo.split(' ')[-1].split('-')
+            mes = partes_nombre[0]
+            anio = partes_nombre[1]
+
+            with open(ruta_directorio, "r", encoding="utf-8") as archivo:
+                # Leer cada línea del archivo y separar los campos por coma
+                for linea in archivo:
+                    datos = linea.strip().split(',')
+                    # Insertar mes y año en los datos
+                    datos.insert(0, mes)
+                    datos.insert(1, anio)
+                    # Ingestar los datos en la tabla evento
+                    insertar_evento(datos)
+            print(f"Datos del archivo {nombre_archivo} ingestado en la tabla evento.")
+
+        # Verificar si el nombre del archivo contiene "giro-directo-discriminado-capita-y-evento"
+        elif "giro-directo-discriminado-capita-y-evento" in nombre_archivo:
+            
+            with open(ruta_directorio, "r", encoding="utf-8") as archivo:
+                # Leer la primera línea del archivo para determinar si tiene el campo "FORMA DE CONTRATACIÓN"
+                primera_linea = archivo.readline()
+                for linea in archivo:
+                        datos = linea.strip().split(',')
+                        
+                        # Ingestar los datos en la tabla captacion
+                        insertar_captacion(datos)
+                        setFecha(mes, anio)
+                        
+            print(f"Datos del archivo {nombre_archivo} ingestado en la tabla captacion.")
+
+        else:
+            print("No se encontró un archivo para ingestar")
+
+    # Cerrar la conexión a la base de datos
+    conexion.close()
+    print("Proceso de ingesta finalizado")
+
+---
+
+**Creación de visualizaciones en Power BI**
+
+En este proyecto, se utiliza Power BI para crear visualizaciones que permitan analizar y presentar los datos de las tablas captacion y evento de la base de datos giros_minsalud. A continuación, se detallan los tipos de visualizaciones que se crearon y cómo estas visualizaciones nos ayudarán en nuestro análisis:
+
+- **Captaciones y evento giro x mes 2023**: Muestran los giros hechos durante todo el 2023 tanto en captaciones como el giros
+
+- **Captaciones por departamento 2023** Muestran el recuento de municipios por departamento a los cuales fueron destinados los giros
+
+- **Capitación Enero 2023 vs 2024**: Muestra una comparación de lo girado en enero 2023 vs 2024 en capitaciones
+
+- **Giro directo evento enero 2023 vs 2024**: Muestra una caparación de lo girado en enero 2023 vs 2024 en giro evento
+
+- **Capitacion eps vs total giro 2023** Muestra lo girado a cada eps durante el 2023, deduciendo a cual eps se le giró una mayor cantidad en capitacion
+
+- **Evento eps giro 2023**: Muestra los giros por evento en las eps a lo largo del 2023
+
+- **Giro eps vs ips 2023 capitacion y Giro eps vs ips 2024 capitacion**: Muestra a que cantidad de ips hacen giros las eps, una en todo el 2023, y la otra en enero del 2024 en las capitaciones.
+
+- **Giro eps vs ips 2023 evento y Giro eps vs ips 2024 evento**: Muestra a que cantidad de ips hacen giros las eps, una en todo el 2023, y la otra en enero del 2024 en los eventos.
