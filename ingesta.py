@@ -7,7 +7,15 @@ conexion = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-6QD6LBH;DATABASE=g
 # Función para insertar datos en la tabla captacion
 def insertar_captacion(datos):
     cursor = conexion.cursor()
-    sql = "INSERT INTO dbo.captacion (MES, ANIO, DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, FORMA_DE_CONTRATACIÓN, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    if len(datos) == 9:
+        sql = "INSERT INTO dbo.captacion (MES, ANIO, DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        
+    elif len(datos) == 10:
+        sql = "INSERT INTO dbo.captacion (MES, ANIO, DANE, DEPARTAMENTO, MUNICIPIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, FORMA_DE_CONTRATACIÓN,TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+    else:
+        return
+    
     cursor.execute(sql, datos)
     conexion.commit()
 
@@ -19,7 +27,9 @@ def insertar_evento(datos):
     
     elif len(datos) == 9:
         sql = "INSERT INTO dbo.evento (MES, ANIO, COD_EPS, NOMBRE_EPS, NIT_IPS, NOMBRE_IPS, FORMA_DE_CONTRATACIÓN, TOTAL_GIRO, OBSERVACIÓN) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        
+    
+    else:
+        return
     cursor.execute(sql, datos)
     conexion.commit()
 
@@ -38,6 +48,9 @@ for nombre_archivo in os.listdir(directorio):
 
         with open(ruta_directorio, "r", encoding="utf-8") as archivo:
             # Leer cada línea del archivo y separar los campos por coma
+            
+            print(f"Ingestando la información del archivo {nombre_archivo} en la tabla evento...")
+            
             for linea in archivo:
                 datos = linea.strip().split(',')
                 # Insertar mes y año en los datos
@@ -45,6 +58,7 @@ for nombre_archivo in os.listdir(directorio):
                 datos.insert(1, anio)
                 # Ingestar los datos en la tabla evento
                 insertar_evento(datos)
+        
         print(f"Datos del archivo {nombre_archivo} ingestado en la tabla evento.")
 
     # Verificar si el nombre del archivo contiene "giro-directo-discriminado-capita-y-evento"
@@ -67,11 +81,15 @@ for nombre_archivo in os.listdir(directorio):
                     datos.insert(1, anio)
                     # Ingestar los datos en la tabla captacion
                     insertar_captacion(datos)
+                    
             else:
                 # El archivo no tiene el campo "FORMA DE CONTRATACIÓN"
                 # Regresar al inicio del archivo
                 archivo.seek(0)
                 # Leer cada línea del archivo y separar los campos por coma
+                
+                print(f"Ingestando la información del archivo {datos} en la tabla tabla captación...")
+                
                 for linea in archivo:
                     datos = linea.strip().split(',')
                     # Insertar mes y año en los datos
@@ -79,8 +97,8 @@ for nombre_archivo in os.listdir(directorio):
                     datos.insert(1, anio)
                     # Ingestar los datos en la tabla captacion
                     insertar_captacion(datos)
-
-        print(f"Datos del archivo {nombre_archivo} ingestado en la tabla captacion.")
+                    
+        print(f"Datos del archivo {datos} ingestado en la tabla captación.")
 
     else:
         print("No se encontró un archivo para ingestar")
