@@ -4,16 +4,18 @@ import re
 
 # Establecer conexión a la base de datos SQL Server
 conexion = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-6QD6LBH;DATABASE=giros_minsalud;Trusted_Connection=yes')
-def setfecha():
-        # Expresión regular para buscar el mes y el año en el nombre del archivo
-            patron = r'(\w+)-(\d{4})'
-            coincidencia = re.search(patron, nombre_archivo)
-            if coincidencia:
-                mes = coincidencia.group(1)
-                anio = coincidencia.group(2)
-            else:
-                print("No se pudo encontrar mes y año en el nombre del archivo:", nombre_archivo)
-            
+
+def setFecha(mes, anio):
+    cursor = conexion.cursor()
+    sql = '''UPDATE dbo.captacion 
+    SET MES = ? WHERE MES IS NULL
+    
+    UPDATE dbo.captacion
+    SET ANIO = ? WHERE ANIO IS NULL
+    '''
+    cursor.execute(sql, mes, anio)
+    conexion.commit()
+
 # Función para insertar datos en la tabla captacion
 def insertar_captacion(datos):
     cursor = conexion.cursor()
@@ -46,9 +48,20 @@ def insertar_evento(datos):
 # Directorio donde se encuentran los archivos a ingestar
 directorio = "csv"
 
+# Expresión regular para buscar el mes y el año en el nombre del archivo
+patron = r'(\w+)-(\d{4})'
+
 for nombre_archivo in os.listdir(directorio):
     ruta_directorio = os.path.join(directorio, nombre_archivo)
-        
+    
+    coincidencia = re.search(patron, nombre_archivo)
+    if coincidencia:
+        mes = coincidencia.group(1)
+        anio = coincidencia.group(2)
+    else:
+        print("No se pudo encontrar mes y año en el nombre del archivo:", nombre_archivo)
+        continue  
+    
     # Verificar si el nombre del archivo contiene "GIRO DIRECTO EVENTO"
     if "GIRO DIRECTO EVENTO" in nombre_archivo:
         # Obtener mes y año del nombre del archivo
@@ -78,6 +91,7 @@ for nombre_archivo in os.listdir(directorio):
                     
                     # Ingestar los datos en la tabla captacion
                     insertar_captacion(datos)
+                    setFecha(mes, anio)
                     
         print(f"Datos del archivo {nombre_archivo} ingestado en la tabla captacion.")
 
