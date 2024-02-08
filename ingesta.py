@@ -2,6 +2,7 @@ import os
 import pyodbc
 import re
 
+
 # Establecer conexión a la base de datos SQL Server
 conexion = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-6QD6LBH;DATABASE=giros_minsalud;Trusted_Connection=yes')
 
